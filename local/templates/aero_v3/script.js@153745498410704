@@ -1,0 +1,357 @@
+'use strict';
+
+/**
+ * aero namespase
+ */
+var aero = new function () {
+
+    /**
+     * Признак инициализации
+     *
+     * @var boolean
+     */
+    var initialized = false;
+
+    /**
+     * Инициализирует все функциональные части
+     *
+     * @return void
+     */
+    this.init = function () {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
+        aero.app.init();
+    };
+};
+
+
+/**
+ * Приложение
+ */
+aero.app = new function () {
+    /**
+     * Инициализирует приложение
+     *
+     * @return void
+     */
+    this.init = function () {
+        //Инициализируем функциональные блоки
+        this.blocks.init();
+    };
+};
+
+
+/**
+ * Функциональные блоки
+ */
+aero.app.blocks = new function () {
+    /**
+     * Ф-ии обратного вызова о готовности всех функциональных блоков
+     *
+     * @var array
+     */
+    var initCallbacks = [];
+
+    /**
+     * Зарезервированные названия блоков, которые нельзя переопределять
+     *
+     * @var object
+     */
+    var reserved = {};
+
+    /**
+     * Добавляет ф-ю обратного вызова о готовности всех блоков
+     *
+     * @param object callback Ф-я обратного вызова
+     * @param object context Контекст вызова ф-ии
+     * @return void
+     */
+    this.onInit = function (callback, context) {
+        initCallbacks.push({
+            callback: callback,
+            context: context = context || this
+        });
+    };
+
+    /**
+     * Инициализирует функциональные блоки
+     *
+     * @return void
+     */
+    this.init = function () {
+        for (var key in this) {
+            if (reserved[key]) {
+                continue;
+            }
+
+            var blockConstructor = this[key];
+            if (typeof blockConstructor == 'function') {
+                var blockExists = blockConstructor.exists ? blockConstructor.exists() : true;
+                if (blockExists) {
+                    this[key] = new blockConstructor();
+                }
+            }
+        }
+
+        for (var i = 0; i < initCallbacks.length; i++) {
+            initCallbacks[i].callback.call(
+                initCallbacks[i].context
+            );
+        }
+        ;
+    };
+
+    //Заполняем зарезервированные названия блоков
+    for (var key in this) {
+        reserved[key] = true;
+    }
+};
+
+/**
+ * Пример использования:
+ * var preloader = new aero.preloader('#content');
+ * ...
+ * preloader.hide();
+ *
+ * @return void
+ * @param selector
+ */
+aero.loader = function (selector) {
+    this.show = function () {
+        $(selector)
+            .addClass('preloader')
+    };
+
+    /**
+     * Скрывает индикатор загрузки
+     *
+     * @return void
+     */
+    this.hide = function () {
+        $(selector)
+            .removeClass('preloader')
+    };
+
+    selector = selector || 'body';
+    this.show();
+};
+/**
+ * Общий функционал
+ */
+aero.app.blocks.common = function () {
+
+    // сериализация формы в json-объект
+    $.fn.serializeObject = function () {
+        var o = {};
+        var a = this.serializeArray();
+        $.each(a, function () {
+            if (o[this.name] !== undefined) {
+                if (!o[this.name].push) {
+                    o[this.name] = [o[this.name]];
+                }
+                o[this.name].push(this.value || '');
+            } else {
+                o[this.name] = this.value || '';
+            }
+        });
+        return o;
+    };
+
+    var common = this;
+
+    /**
+     * Получает параметр в url
+     *
+     * @param name
+     * @returns {string|null}
+     */
+    common.getURLParameter = function (name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search) || [, ''])[1].replace(/\+/g, '%20')) || null;
+    };
+
+    /**
+     * Меняет параметр в URL
+     *
+     * @param param
+     * @param value
+     */
+    common.changeUrlParameters = function (param, value) {
+
+        var urlParams = aero.app.blocks.common.getAllUrlParams();
+        var queryString = '';
+        $.each(urlParams,function(index,value){
+           if(value.split('=')[0]!='tags' && value.split('=')[0]!='' ){
+               queryString = queryString + '&' + value;
+           }
+        });
+        var currentURL = window.location.protocol + '//' + window.location.hostname + window.location.pathname + '&';
+        var newUrlString = '';
+        currentURL = currentURL.split('#')[0];
+        if (currentURL.indexOf('?') !== -1) {
+            newUrlString = currentURL.slice(0, -1) + '&' + param + '=' + value + queryString;
+        } else {
+            newUrlString = currentURL.slice(0, -1) + '?' + param + '=' + value + queryString;
+        }
+        if (!value) {
+            newUrlString = currentURL.slice(0, -1) + '?' + queryString.substring(1);
+        }
+        window.history.replaceState('', '', newUrlString);
+    };
+
+    common.findGetParameter = function (parameterName) {
+        var result = null,
+            tmp = [];
+        location.search
+            .substr(1)
+            .split("&")
+            .forEach(function (item) {
+                tmp = item.split("=");
+                if (tmp[0] === parameterName) result = decodeURIComponent(tmp[1]);
+            });
+        return result;
+    };
+
+    common.getAllUrlParams = function () {
+        var keyPairs = [],
+            params = window.location.search.substring(1).split('&');
+        for (var i = params.length - 1; i >= 0; i--) {
+            keyPairs.push(params[i]);
+        }
+        ;
+        return keyPairs;
+    }
+};
+
+/**
+ * ajax для фильтра Knowledge Cloud
+ */
+aero.app.blocks.mediaFilter = function () {
+    $(document).on('click', '.filters__item', function (e)
+    {
+        $(".js-show-more").css("display", "block");
+        var tags = $(this).data("tags");
+        var url = $(".b-page-media-filters").data("controller");
+        aero.app.blocks.common.changeUrlParameters("tags", tags);
+        $.ajax({
+            type: 'get',
+            url: url + tags,
+            success: function (response) {
+                $(".b-page-media-filters").html($(response.filter).html());
+                $("#articles").replaceWith(response.component);
+                $(".js-show-more").data("pagen", 2);
+                var maxPagenCount = $('#articles').data("pagecount");
+                if (maxPagenCount === 1){
+                    $(".js-show-more").css("display", "none");
+                }
+
+            }
+        });
+        e.stopImmediatePropagation();
+        return false;
+    });
+};
+/**
+ * Фильтрация проектов по тэгам
+ */
+aero.app.blocks.projectsFilter = function (status) {
+    $(document).on('click', '.b-page-project-all-filter .filters__item', function (e) {
+        var tags = $(this).data("tags");//получаем тэги
+        var url = $(".b-page-project-all-filter").data("controller");
+        aero.app.blocks.common.changeUrlParameters("tags", tags);
+        $.ajax({
+            type: 'get',
+            url: url + tags,
+            PAGEN_1: 1, //показываем первые 6 проектов
+            success: function (response) {
+                $(".b-page-project-all-filter").html($(response.filter).html());
+                $("#projects").replaceWith(response.html);
+                if (response.left > 0) {
+                    setScrollEventHandler(false); //если отфильтрованных проектов >6 то подгружаем аяксом следующие 6
+                }
+                else {
+                    setScrollEventHandler(true); //если вывели все отфильтрованные проекты подругаем футер
+                }
+
+            }
+        });
+        e.stopImmediatePropagation();
+        return false;
+    });
+};
+
+aero.app.blocks.mediaShowMore = function () {
+    var inProgress = false; // Переменная-флаг для отслеживания того, происходит ли в данный момент ajax-запрос. 
+    // В самом начале даем ей значение false, т.е. запрос не в процессе выполнения
+
+    function ajaxCall() {
+        var tags = aero.app.blocks.common.getURLParameter("tags");
+        var url = $(".b-page-media-filters").data("controller");
+        var maxPagenCount = $('#articles').data("pagecount");
+        var nextPagen = $(".js-show-more").data("pagen");
+
+        if (tags !== null) {
+            tags = '&tags=' + tags;
+        } else {
+            tags = "";
+        }
+        if (nextPagen <= maxPagenCount) {
+            $.ajax({
+                type: 'get',
+                url: url + tags + '&PAGEN_1=' + nextPagen,
+                beforeSend: function () {
+                    inProgress = true;
+                },
+                success: function (response) {
+                    $("#articles").append($(response.component).html());
+                }
+            }).done(function () {
+                inProgress = false;
+            });
+
+            $(".js-show-more").data("pagen", nextPagen + 1);
+            if (nextPagen === maxPagenCount) {
+                $(".js-show-more").css("display", "none");
+            }
+
+        } else {
+            $(".sjs-show-more").css("display", "none");
+        }
+    }
+
+    $(window).on('scroll', function (e) {
+        var scrollContainerHeight = $('.js-ajax-scroll').height();
+        var scrollContainerOffsetTop = $('.js-ajax-scroll').offset().top;
+
+        if ($(window).scrollTop() >= scrollContainerHeight + scrollContainerOffsetTop - ($(window).height() / 1.8) && !inProgress) {
+            ajaxCall();
+            return false;
+        }
+    });
+
+    $(document).on('click', '.js-show-more', function (e) {
+        ajaxCall();
+        e.stopImmediatePropagation();
+        return false;
+    });
+};
+
+aero.app.blocks.mediaFilter.exists = function () {
+
+    return $(".b-page-media-filters").length > 0;
+};
+
+aero.app.blocks.mediaShowMore.exists = function () {
+
+    var maxPagenCount = $('#articles').data("pagecount");
+    if (maxPagenCount === 1){
+        $(".js-show-more").css("display", "none");
+    }
+    return $(".js-show-more").length > 0;
+};
+
+/** Инициализация после готовности DOM */
+$(function () {
+    aero.init();
+});

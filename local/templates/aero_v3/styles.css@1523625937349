@@ -1,0 +1,25 @@
+.b-portfolio-list__imac {
+	background-repeat: no-repeat;
+	position: absolute;
+	left: 50%;
+	bottom: 40px;
+	margin-top: 0;
+}
+
+.f-message {
+	display: none !Important;
+}
+
+.project-link-subtext {
+	font-weight: normal;
+	font-size: 1.125rem;
+}
+
+.b-colored-block_yellow2 {
+	background-color: #ffdc61;
+}
+
+.no-detail {
+	display: inline-block;
+	height: 90px;
+}
